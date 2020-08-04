@@ -21,7 +21,12 @@ package object retry {
         S: Sleep[M]
     ): M[A] = {
       new RetryingPartiallyApplied2[A]
-        .apply(policy, a => M.pure(wasSuccessful(a)), onFailure)(action)
+        .apply(
+          policy,
+          a => M.pure(wasSuccessful(a)),
+          onFailure,
+          M.pure
+        )(action)
     }
   }
 
@@ -31,7 +36,8 @@ package object retry {
     def apply[M[_]](
         policy: RetryPolicy[M],
         wasSuccessful: A => M[Boolean],
-        onFailure: (A, RetryDetails) => M[Unit]
+        onFailure: (A, RetryDetails) => M[Unit],
+        onGiveUp: A => M[A]
     )(
         action: => M[A]
     )(
@@ -52,13 +58,12 @@ package object retry {
                   S.sleep(delay) *>
                     M.pure(Left(updatedStatus)) // continue recursion
                 case NextStep.GiveUp =>
-                  M.pure(Right(a)) // stop the recursion
+                  onGiveUp(a).map(Right(_)) // stop the recursion
               }
             } yield result
           )
         }
       }
-
     }
   }
 
